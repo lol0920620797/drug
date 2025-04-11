@@ -7,6 +7,8 @@
 
   <!-- Bootstrap -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- SweetAlert2 -->
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <!-- Firebase compat SDK -->
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
@@ -16,7 +18,7 @@
   <div class="container py-5">
     <h1 class="text-center mb-4">💊 藥物清單管理系統</h1>
 
-    <!-- 🔍 搜尋藥名 -->
+    <!-- 搜尋 -->
     <div class="mb-3">
       <input type="text" id="searchInput" class="form-control" placeholder="🔍 請輸入藥名進行搜尋" oninput="renderDrugs()">
     </div>
@@ -41,7 +43,6 @@
   </div>
 
   <script>
-    // ✅ 你的 firebaseConfig
     const firebaseConfig = {
       apiKey: "AIzaSyBI6nbcytrLY15EUi8CBVGDK6GNlgPhSD4",
       authDomain: "druglistapp-9590d.firebaseapp.com",
@@ -66,8 +67,17 @@
         storage: document.getElementById("storage").value.trim(),
         emergencyGuideline: document.getElementById("emergencyGuideline").value.trim()
       };
-      if (!data.name || !data.indication) return alert("請至少填寫藥名與適應症");
-      drugsRef.add(data).then(clearForm);
+
+      for (let key in data) {
+        if (!data[key]) {
+          return Swal.fire("欄位未填", "請完整填寫所有欄位", "warning");
+        }
+      }
+
+      drugsRef.add(data).then(() => {
+        clearForm();
+        Swal.fire("新增成功", "藥物資料已加入清單", "success");
+      });
     }
 
     function clearForm() {
@@ -88,19 +98,7 @@
           const li = document.createElement("li");
           li.className = "list-group-item";
           if (d.editing) {
-            li.innerHTML = `
-              <div class="row g-2">
-                <div class="col-md-4"><input class="form-control" id="editName${doc.id}" value="${d.name}"></div>
-                <div class="col-md-4"><input class="form-control" id="editIndication${doc.id}" value="${d.indication}"></div>
-                <div class="col-md-4"><input class="form-control" id="editSideEffect${doc.id}" value="${d.sideEffect}"></div>
-                <div class="col-md-6"><input class="form-control" id="editSpecial${doc.id}" value="${d.specialInstruction}"></div>
-                <div class="col-md-6"><input class="form-control" id="editStorage${doc.id}" value="${d.storage}"></div>
-                <div class="col-md-12"><input class="form-control" id="editEmergency${doc.id}" value="${d.emergencyGuideline}"></div>
-                <div class="col-md-12 text-end mt-2">
-                  <button class="btn btn-success btn-sm me-1" onclick="saveEdit('${doc.id}')">儲存</button>
-                  <button class="btn btn-secondary btn-sm" onclick="cancelEdit('${doc.id}')">取消</button>
-                </div>
-              </div>`;
+            li.innerHTML = `...`; // 留下你原有的修改表單代碼
           } else {
             li.innerHTML = `
               <div>
@@ -120,41 +118,6 @@
         });
     }
 
-    function editDrug(id) {
-      const index = drugCache.findIndex(d => d.id === id);
-      if (index !== -1) {
-        drugCache[index].data.editing = true;
-        renderDrugs();
-      }
-    }
-
-    function cancelEdit(id) {
-      const index = drugCache.findIndex(d => d.id === id);
-      if (index !== -1) {
-        drugCache[index].data.editing = false;
-        renderDrugs();
-      }
-    }
-
-    function saveEdit(id) {
-      const updateData = {
-        name: document.getElementById(`editName${id}`).value.trim(),
-        indication: document.getElementById(`editIndication${id}`).value.trim(),
-        sideEffect: document.getElementById(`editSideEffect${id}`).value.trim(),
-        specialInstruction: document.getElementById(`editSpecial${id}`).value.trim(),
-        storage: document.getElementById(`editStorage${id}`).value.trim(),
-        emergencyGuideline: document.getElementById(`editEmergency${id}`).value.trim()
-      };
-      drugsRef.doc(id).update(updateData);
-    }
-
-    function deleteDrug(id) {
-      if (confirm("確定要刪除這筆藥物資料？")) {
-        drugsRef.doc(id).delete();
-      }
-    }
-
-    // 初始載入 + 監聽資料
     drugsRef.orderBy("name").onSnapshot(snapshot => {
       drugCache = [];
       snapshot.forEach(doc => {

@@ -6,6 +6,6 @@
     <meta http-equiv="refresh" content="0; url=index.html" />
   </head>
   <body>
-    <p>正在跳转到主页面... 如果未自动跳转，请<a href="http://localhost:8080/index.html">点击这里</a>。</p>
+    <p>正在跳转到主页面... 如果未自动跳转，请<a href="https://lol0920620797.github.io/drug/">点击这里</a>。</p>
   </body>
 </html>

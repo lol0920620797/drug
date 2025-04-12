@@ -58,31 +58,38 @@
     <h1 class="text-center mb-4">💊 藥物清單管理系統</h1>
 
     <!-- 匯出 PDF 按鈕 & 搜尋欄 -->
-    <div class="mb-3 row">
-      <div class="col-md-6">
+    <div class="mb-3 row g-2">
+      <div class="col-12 col-md-6">
         <input type="text" id="searchInput" class="form-control" placeholder="🔍 搜尋藥品關鍵字" oninput="renderDrugs()">
       </div>
-      <div class="col-md-6 text-end">
-        <button class="btn btn-outline-primary" onclick="exportPDF()">匯出 PDF（僅勾選）</button>
+      <div class="col-12 col-md-6 text-md-end">
+        <button class="btn btn-outline-primary w-100 w-md-auto" onclick="exportPDF()">匯出 PDF（僅勾選）</button>
       </div>
     </div>
+
 
     <!-- 新增藥品表單 -->
     <div class="card mb-4">
       <div class="card-body">
         <div class="row g-3">
-          <div class="col-md-4"><input type="text" id="name" class="form-control" placeholder="藥名（必填）"></div>
-          <div class="col-md-4"><input type="text" id="indication" class="form-control" placeholder="適應症"></div>
-          <div class="col-md-4"><input type="text" id="sideEffect" class="form-control" placeholder="副作用"></div>
-          <div class="col-md-6"><input type="text" id="specialInstruction" class="form-control" placeholder="特殊用藥指示">
+          <div class="col-12 col-md-4">
+            <input type="text" id="name" class="form-control" placeholder="藥名（必填）">
           </div>
-          <div class="col-md-6"><input type="text" id="storage" class="form-control" placeholder="保存方式"></div>
-          <div class="col-md-12"><input type="text" id="emergencyGuideline" class="form-control" placeholder="應急時機">
+          <div class="col-12 col-md-4">
+            <input type="text" id="indication" class="form-control" placeholder="適應症">
           </div>
-          <!-- <div class="col-md-12">
-            <input type="file" id="image" class="form-control" accept="image/*" onchange="previewImage(event)">
-            <img id="preview" class="preview-img" />
-          </div> -->
+          <div class="col-12 col-md-4">
+            <input type="text" id="sideEffect" class="form-control" placeholder="副作用">
+          </div>
+          <div class="col-12 col-md-6">
+            <input type="text" id="specialInstruction" class="form-control" placeholder="特殊用藥指示">
+          </div>
+          <div class="col-12 col-md-6">
+            <input type="text" id="storage" class="form-control" placeholder="保存方式">
+          </div>
+          <div class="col-12">
+            <input type="text" id="emergencyGuideline" class="form-control" placeholder="應急時機">
+          </div>
           <div class="text-center">
             <button class="btn btn-primary" onclick="addDrug()">新增藥物</button>
           </div>

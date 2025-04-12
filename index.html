@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
+
 <head>
   <meta charset="UTF-8">
   <title>藥物清單管理系統</title>
@@ -7,125 +8,329 @@
 
   <!-- Bootstrap -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <!-- Google Fonts for Chinese -->
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC&display=swap" rel="stylesheet">
+  <style>
+    * {
+      font-family: 'Noto Sans TC', sans-serif;
+    }
+
+    .preview-img {
+      max-height: 60px;
+      margin-top: 4px;
+    }
+
+    th,
+    td {
+      vertical-align: middle !important;
+    }
+
+    body,
+    table,
+    td,
+    th,
+    h1,
+    h2,
+    h3 {
+      font-family: 'Noto Sans TC', sans-serif !important;
+    }
+  </style>
+
   <!-- SweetAlert2 -->
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-  <!-- Firebase compat SDK -->
+
+  <!-- Firebase -->
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+
+  <!-- html2canvas + jsPDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+
+
 </head>
 
 <body class="bg-light">
   <div class="container py-5">
     <h1 class="text-center mb-4">💊 藥物清單管理系統</h1>
 
-    <!-- 搜尋 -->
-    <div class="mb-3">
-      <input type="text" id="searchInput" class="form-control" placeholder="🔍 請輸入藥名進行搜尋" oninput="renderDrugs()">
+    <!-- 匯出 PDF 按鈕 & 搜尋欄 -->
+    <div class="mb-3 row">
+      <div class="col-md-6">
+        <input type="text" id="searchInput" class="form-control" placeholder="🔍 搜尋藥品關鍵字" oninput="renderDrugs()">
+      </div>
+      <div class="col-md-6 text-end">
+        <button class="btn btn-outline-primary" onclick="exportPDF()">匯出 PDF（僅勾選）</button>
+      </div>
     </div>
 
-    <!-- 新增表單 -->
+    <!-- 新增藥品表單 -->
     <div class="card mb-4">
       <div class="card-body">
         <div class="row g-3">
-          <div class="col-md-4"><input type="text" id="name" class="form-control" placeholder="藥名"></div>
+          <div class="col-md-4"><input type="text" id="name" class="form-control" placeholder="藥名（必填）"></div>
           <div class="col-md-4"><input type="text" id="indication" class="form-control" placeholder="適應症"></div>
           <div class="col-md-4"><input type="text" id="sideEffect" class="form-control" placeholder="副作用"></div>
-          <div class="col-md-6"><input type="text" id="specialInstruction" class="form-control" placeholder="特殊用藥指示"></div>
-          <div class="col-md-6"><input type="text" id="storage" class="form-control" placeholder="藥物保存方式"></div>
-          <div class="col-md-12"><input type="text" id="emergencyGuideline" class="form-control" placeholder="應急就醫時機"></div>
-          <div class="col-md-12 d-grid"><button class="btn btn-primary" onclick="addDrug()">新增藥物</button></div>
+          <div class="col-md-6"><input type="text" id="specialInstruction" class="form-control" placeholder="特殊用藥指示">
+          </div>
+          <div class="col-md-6"><input type="text" id="storage" class="form-control" placeholder="保存方式"></div>
+          <div class="col-md-12"><input type="text" id="emergencyGuideline" class="form-control" placeholder="應急時機">
+          </div>
+          <!-- <div class="col-md-12">
+            <input type="file" id="image" class="form-control" accept="image/*" onchange="previewImage(event)">
+            <img id="preview" class="preview-img" />
+          </div> -->
+          <div class="text-center">
+            <button class="btn btn-primary" onclick="addDrug()">新增藥物</button>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- 清單 -->
-    <ul class="list-group" id="drugList"></ul>
-  </div>
+    <!-- 清單區塊 -->
+    <div class="table-responsive">
+      <table class="table table-bordered bg-white align-middle text-center" id="drugTable">
+        <thead class="table-secondary">
+          <tr>
+            <th><input type="checkbox" id="selectAll" onchange="toggleAll(this.checked)"> 全選</th>
+            <th>藥名</th>
+            <th>適應症</th>
+            <th>副作用</th>
+            <th>特殊用藥指示</th>
+            <th>保存方式</th>
+            <th>應急時機</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="drugList"></tbody>
+      </table>
+    </div>
 
-  <script>
-    const firebaseConfig = {
-      apiKey: "AIzaSyBI6nbcytrLY15EUi8CBVGDK6GNlgPhSD4",
-      authDomain: "druglistapp-9590d.firebaseapp.com",
-      projectId: "druglistapp-9590d",
-      storageBucket: "druglistapp-9590d.appspot.com",
-      messagingSenderId: "779715592474",
-      appId: "1:779715592474:web:e83197b85f06afab90aca3"
-    };
-
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.firestore();
-    const drugsRef = db.collection("drugs");
-
-    let drugCache = [];
-
-    function addDrug() {
-      const data = {
-        name: document.getElementById("name").value.trim(),
-        indication: document.getElementById("indication").value.trim(),
-        sideEffect: document.getElementById("sideEffect").value.trim(),
-        specialInstruction: document.getElementById("specialInstruction").value.trim(),
-        storage: document.getElementById("storage").value.trim(),
-        emergencyGuideline: document.getElementById("emergencyGuideline").value.trim()
+    <script>
+      const firebaseConfig = {
+        apiKey: "AIzaSyBI6nbcytrLY15EUi8CBVGDK6GNlgPhSD4",
+        authDomain: "druglistapp-9590d.firebaseapp.com",
+        projectId: "druglistapp-9590d"
       };
+      firebase.initializeApp(firebaseConfig);
+      const db = firebase.firestore();
+      const drugsRef = db.collection("drugs");
 
-      for (let key in data) {
-        if (!data[key]) {
-          return Swal.fire("欄位未填", "請完整填寫所有欄位", "warning");
-        }
+      let drugCache = [];
+      let selectedIds = new Set();
+      let imageBase64 = "";
+
+      // function previewImage(event) {
+      //   const reader = new FileReader();
+      //   reader.onload = function (e) {
+      //     imageBase64 = e.target.result;
+      //     document.getElementById("preview").src = imageBase64;
+      //   };
+      //   reader.readAsDataURL(event.target.files[0]);
+      // }
+
+      function toggleAll(checked) {
+        const checkboxes = document.querySelectorAll("#drugList input[type='checkbox']");
+        checkboxes.forEach(cb => {
+          cb.checked = checked;
+          const id = cb.getAttribute("data-id");
+          if (checked) selectedIds.add(id);
+          else selectedIds.delete(id);
+        });
       }
 
-      drugsRef.add(data).then(() => {
-        clearForm();
-        Swal.fire("新增成功", "藥物資料已加入清單", "success");
-      });
-    }
-
-    function clearForm() {
-      ["name", "indication", "sideEffect", "specialInstruction", "storage", "emergencyGuideline"].forEach(id => {
-        document.getElementById(id).value = "";
-      });
-    }
-
-    function renderDrugs() {
-      const list = document.getElementById("drugList");
-      const keyword = document.getElementById("searchInput").value.trim().toLowerCase();
-      list.innerHTML = "";
-
-      drugCache
-        .filter(doc => doc.data.name.toLowerCase().includes(keyword))
-        .forEach(doc => {
-          const d = doc.data;
-          const li = document.createElement("li");
-          li.className = "list-group-item";
-          if (d.editing) {
-            li.innerHTML = `...`; // 留下你原有的修改表單代碼
-          } else {
-            li.innerHTML = `
-              <div>
-                <strong>藥名：</strong>${d.name}<br>
-                <strong>適應症：</strong>${d.indication}<br>
-                <strong>副作用：</strong>${d.sideEffect}<br>
-                <strong>特殊用藥指示：</strong>${d.specialInstruction}<br>
-                <strong>藥物保存方式：</strong>${d.storage}<br>
-                <strong>應急就醫時機：</strong>${d.emergencyGuideline}
-              </div>
-              <div class="mt-2 text-end">
-                <button class="btn btn-warning btn-sm me-1" onclick="editDrug('${doc.id}')">修改</button>
-                <button class="btn btn-danger btn-sm" onclick="deleteDrug('${doc.id}')">刪除</button>
-              </div>`;
-          }
-          list.appendChild(li);
+      function addDrug() {
+        const data = {
+          name: document.getElementById("name").value.trim(),
+          indication: document.getElementById("indication").value.trim(),
+          sideEffect: document.getElementById("sideEffect").value.trim(),
+          specialInstruction: document.getElementById("specialInstruction").value.trim(),
+          storage: document.getElementById("storage").value.trim(),
+          emergencyGuideline: document.getElementById("emergencyGuideline").value.trim(),
+          image: imageBase64 || ""
+        };
+        if (!data.name) return Swal.fire("藥名未填", "請至少填寫藥名", "warning");
+        drugsRef.add(data).then(() => {
+          Swal.fire("新增成功", "藥物已加入清單", "success");
+          document.querySelectorAll("input").forEach(input => input.value = "");
+          document.getElementById("preview").src = "";
+          imageBase64 = "";
         });
-    }
+      }
 
-    drugsRef.orderBy("name").onSnapshot(snapshot => {
-      drugCache = [];
-      snapshot.forEach(doc => {
-        const data = doc.data();
-        drugCache.push({ id: doc.id, data });
+      function toggleSelect(id, checked) {
+        if (checked) selectedIds.add(id);
+        else selectedIds.delete(id);
+      }
+
+      function renderDrugs() {
+        const keyword = document.getElementById("searchInput").value.trim().toLowerCase();
+        const list = document.getElementById("drugList");
+        list.innerHTML = "";
+
+
+        drugCache.filter(doc => {
+          const d = doc.data;
+          return (
+            d.name + d.indication + d.sideEffect + d.specialInstruction + d.storage + d.emergencyGuideline
+          ).toLowerCase().includes(keyword);
+        }).forEach(doc => {
+          const d = doc.data;
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+          <td><input type="checkbox" data-id="${doc.id}" onchange="toggleSelect('${doc.id}', this.checked)" ${selectedIds.has(doc.id) ? "checked" : ""}></td>
+            <td>${d.name}</td>
+            <td>${d.indication}</td>
+            <td>${d.sideEffect}</td>
+            <td>${d.specialInstruction}</td>
+            <td>${d.storage}</td>
+            <td>${d.emergencyGuideline}</td>
+            <td>
+              <button class="btn btn-sm btn-warning" onclick="editDrug('${doc.id}')">修改</button>
+              <button class="btn btn-sm btn-danger" onclick="deleteDrug('${doc.id}')">刪除</button>
+            </td>
+          `;
+          list.appendChild(tr);
+        });
+
+      }
+
+      function editDrug(id) {
+        const drug = drugCache.find(doc => doc.id === id);
+        if (!drug) return;
+        const data = drug.data;
+        Swal.fire({
+          title: '修改藥物',
+          html: `
+            <input id="swal-name" class="swal2-input" placeholder="藥名" value="${data.name || ''}">
+            <input id="swal-indication" class="swal2-input" placeholder="適應症" value="${data.indication || ''}">
+            <input id="swal-side" class="swal2-input" placeholder="副作用" value="${data.sideEffect || ''}">
+            <input id="swal-special" class="swal2-input" placeholder="特殊用藥指示" value="${data.specialInstruction || ''}">
+            <input id="swal-storage" class="swal2-input" placeholder="保存方式" value="${data.storage || ''}">
+            <input id="swal-emergency" class="swal2-input" placeholder="應急時機" value="${data.emergencyGuideline || ''}">
+          `,
+          focusConfirm: false,
+          preConfirm: () => {
+            return {
+              name: document.getElementById('swal-name').value,
+              indication: document.getElementById('swal-indication').value,
+              sideEffect: document.getElementById('swal-side').value,
+              specialInstruction: document.getElementById('swal-special').value,
+              storage: document.getElementById('swal-storage').value,
+              emergencyGuideline: document.getElementById('swal-emergency').value,
+              image: data.image || ""
+            }
+          }
+        }).then(result => {
+          if (result.isConfirmed) {
+            drugsRef.doc(id).update(result.value).then(() => {
+              Swal.fire('修改成功', '', 'success');
+            });
+          }
+        });
+      }
+
+      function deleteDrug(id) {
+        Swal.fire({
+          title: '確定刪除？',
+          text: '此操作無法復原',
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonText: '刪除',
+          cancelButtonText: '取消'
+        }).then(result => {
+          if (result.isConfirmed) {
+            drugsRef.doc(id).delete().then(() => {
+              Swal.fire('已刪除', '', 'success');
+            });
+          }
+        });
+      }
+
+      drugsRef.orderBy("name").onSnapshot(snapshot => {
+        drugCache = [];
+        snapshot.forEach(doc => drugCache.push({ id: doc.id, data: doc.data() }));
+        renderDrugs();
       });
-      renderDrugs();
-    });
-  </script>
+
+      async function exportPDF() {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+
+        const selectedDrugs = drugCache.filter(doc => selectedIds.has(doc.id));
+        if (selectedDrugs.length === 0) {
+          return Swal.fire("未勾選", "請至少勾選一筆藥品", "info");
+        }
+
+        // 🛠️ 用 innerHTML 拼出完整 DOM
+        const temp = document.createElement("div");
+        temp.style.padding = "10px";
+        temp.style.fontFamily = "'Noto Sans TC', sans-serif";
+        temp.style.width = "794px"; // A4 尺寸對應 width (for canvas)
+        temp.style.background = "white";
+
+        // 手工拼整個 innerHTML
+        temp.innerHTML = `
+    <div style="text-align:center; margin-bottom: 10px;">
+  <img src="imgs/專心logo.png" style="max-height: 60px;" />專心動物醫院
+</div>
+    <div style="text-align:center; font-size: 12px; margin-bottom: 10px;">地址：台北市中正區仁愛路一段47號  電話：02-23633016</div>
+    <div style="text-align:left; font-size: 10px; margin-bottom: 10px;">列印時間：${new Date().toLocaleString("zh-TW", { hour12: false })}</div>
+
+    <table style="width:100%; border-collapse:collapse; font-size: 10px;" border="1">
+      <thead style="background:#eee;">
+        <tr>
+          <th style="padding:4px;">藥名</th>
+          <th style="padding:4px;">適應症</th>
+          <th style="padding:4px;">副作用</th>
+          <th style="padding:4px;">特殊用藥指示</th>
+          <th style="padding:4px;">保存方式</th>
+          <th style="padding:4px;">應急時機</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${selectedDrugs.map(d => {
+          const data = d.data;
+          return `<tr>
+            <td style="padding:4px;">${data.name}</td>
+            <td style="padding:4px;">${data.indication}</td>
+            <td style="padding:4px;">${data.sideEffect}</td>
+            <td style="padding:4px;">${data.specialInstruction}</td>
+            <td style="padding:4px;">${data.storage}</td>
+            <td style="padding:4px;">${data.emergencyGuideline}</td>
+          </tr>`;
+        }).join("")}
+      </tbody>
+    </table>
+
+    <div style="text-align:right; font-size: 10px; margin-top:10px;">© 酷哥阿邱</div>
+  `;
+
+        // 加進畫面外、準備渲染
+        document.body.appendChild(temp);
+
+        // 轉為圖片
+        const canvas = await html2canvas(temp, { scale: 2 });
+        const imgData = canvas.toDataURL("image/png");
+        const imgProps = doc.getImageProperties(imgData);
+        const pdfWidth = doc.internal.pageSize.getWidth();
+        const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+
+        // 加入圖片進 PDF
+        doc.addImage(imgData, "PNG", 14, 14, pdfWidth - 28, pdfHeight);
+        doc.save("勾選藥物清單.pdf");
+
+        // 清掉臨時 DOM
+        document.body.removeChild(temp);
+      }
+
+
+
+    </script>
+  </div>
 </body>
+
 </html>

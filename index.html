@@ -5,7 +5,21 @@
   <meta charset="UTF-8">
   <title>藥物清單管理系統</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
   <link rel="icon" type="image/png" href="imgs/專心logo.png">
+  <script>
+    (() => {
+      window.addEventListener("hashchange", () => {
+        const nextHash = new URLSearchParams(window.location.hash.slice(1));
+        if (nextHash.get("qrUpload")) window.location.reload();
+      });
+      const hash = new URLSearchParams(window.location.hash.slice(1));
+      const sessionId = hash.get("qrUpload");
+      if (!sessionId) return;
+      window.__qrUploadBootstrap = { sessionId, encodedKey: hash.get("key") || "" };
+      history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+    })();
+  </script>
 
   <!-- Bootstrap -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -61,7 +75,7 @@
     }
 
     .actions-column {
-      min-width: 132px;
+      min-width: 210px;
     }
 
     .edit-image-preview {
@@ -71,6 +85,54 @@
       border-radius: 0.5rem;
       border: 1px solid #dee2e6;
       background: #f8f9fa;
+    }
+
+    .qr-code-box {
+      width: 236px;
+      min-height: 236px;
+      margin: 0 auto;
+      padding: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid #dee2e6;
+      border-radius: 0.75rem;
+      background: #fff;
+    }
+
+    .qr-code-box canvas,
+    .qr-code-box img {
+      display: block;
+      margin: auto;
+      max-width: 100%;
+      height: auto;
+    }
+
+    .qr-upload-page {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .qr-upload-card {
+      width: 100%;
+      max-width: 560px;
+    }
+
+    .qr-page-logo {
+      width: 92px;
+      height: 92px;
+      object-fit: contain;
+    }
+
+    .mobile-photo-preview {
+      width: min(100%, 320px);
+      max-height: 320px;
+      object-fit: contain;
+      border-radius: 0.75rem;
+      border: 1px solid #dee2e6;
+      background: #fff;
     }
 
     th,
@@ -91,6 +153,9 @@
 
   <!-- SweetAlert2 -->
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"
+    integrity="sha512-CNgIRecGo7nphbeZ04Sc13ka07paqdeTu0WR1IM4kNcpmBAUSHSQX0FslNhTDadL4O5SAGapGt4FodqL8My0mA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
   <!-- Firebase -->
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
@@ -106,7 +171,30 @@
 </head>
 
 <body class="bg-light">
-  <div class="container py-5">
+  <div id="qrUploadPage" class="container qr-upload-page py-4" hidden>
+    <div class="card qr-upload-card shadow-sm">
+      <div class="card-body p-4 p-md-5 text-center">
+        <img src="imgs/專心logo.png" class="qr-page-logo mb-3" alt="專心動物醫院標誌">
+        <h1 class="h3 mb-3">手機上傳藥物照片</h1>
+        <div id="mobileSessionMessage" class="alert alert-info" role="status" aria-live="polite">正在驗證 QR Code…</div>
+        <div id="mobileUploadControls" class="text-start" hidden>
+          <label for="mobileImageFile" class="form-label fw-semibold">拍照或選擇照片</label>
+          <input type="file" id="mobileImageFile" class="form-control" accept="image/jpeg,image/png,image/webp"
+            capture="environment" onchange="previewMobileQrImage(event)">
+          <div class="form-text mb-3">支援 JPG、PNG、WebP，照片會先在手機上自動壓縮再加密傳送。</div>
+          <div class="text-center mb-3">
+            <img id="mobilePhotoPreview" class="mobile-photo-preview" alt="手機所選照片預覽" hidden>
+          </div>
+          <div id="mobileImageStatus" class="small text-secondary mb-3" role="status" aria-live="polite"></div>
+          <button type="button" id="mobileUploadButton" class="btn btn-primary w-100" onclick="submitMobileQrImage()"
+            disabled>上傳到電腦</button>
+          <p class="small text-secondary mt-3 mb-0">請保持電腦上的 QR Code 視窗開啟，直到顯示上傳成功。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="mainApp" class="container py-5">
     <h1 class="text-center mb-4">💊 藥物清單管理系統</h1>
 
     <!-- 匯出 PDF 按鈕 & 搜尋欄 -->
@@ -147,6 +235,10 @@
             <input type="file" id="imageFile" class="form-control" accept="image/jpeg,image/png,image/webp"
               onchange="previewImage(event)">
             <div class="form-text mb-2">支援 JPG、PNG、WebP，原始檔案上限 10 MB；上傳前會自動縮小與壓縮。</div>
+            <div class="mb-2">
+              <button type="button" id="qrAddPhotoButton" class="btn btn-outline-success"
+                onclick="startQrUploadForAddForm()">📱 掃 QR Code 用手機上傳</button>
+            </div>
             <div class="image-preview-area">
               <img id="preview" class="preview-img" alt="所選藥物照片預覽" hidden>
               <span id="imagePlaceholder" class="text-secondary">尚未選擇照片</span>
@@ -191,10 +283,14 @@
       firebase.initializeApp(firebaseConfig);
       const db = firebase.firestore();
       const drugsRef = db.collection("drugs");
+      const photoUploadSessionsRef = db.collection("photoUploadSessions");
 
       const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
       const MAX_SOURCE_IMAGE_BYTES = 10 * 1024 * 1024;
       const MAX_STORED_IMAGE_LENGTH = 600000;
+      const QR_SESSION_DURATION_MS = 10 * 60 * 1000;
+      const QR_SESSION_ID_PATTERN = /^[a-f0-9]{32}$/;
+      const MAX_QR_CIPHERTEXT_BYTES = 500000;
       const SEARCH_FIELDS = [
         "name",
         "indication",
@@ -211,6 +307,15 @@
       let imageProcessingToken = 0;
       let isImageProcessing = false;
       let isAddingDrug = false;
+      let activeQrTransferCleanup = null;
+      let mobileQrSessionRef = null;
+      let mobileQrSessionId = "";
+      let mobileQrKey = "";
+      let mobileQrExpiresAt = 0;
+      let mobileImageData = "";
+      let mobileImageProcessingToken = 0;
+      let isMobileImageProcessing = false;
+      let isMobileUploading = false;
 
       function formatBytes(bytes) {
         if (bytes < 1024) return `${bytes} B`;
@@ -228,6 +333,113 @@
         if (code.includes("permission-denied")) return "目前沒有資料庫寫入權限，請檢查 Firebase 規則。";
         if (code.includes("unavailable")) return "目前無法連線到資料庫，請確認網路後再試一次。";
         return error?.message || "發生未預期的錯誤，請稍後再試。";
+      }
+
+      function requireSecureCrypto() {
+        if (!window.crypto?.getRandomValues || !window.crypto?.subtle) {
+          throw new Error("此瀏覽器不支援安全的 QR 照片傳輸，請改用最新版 Chrome、Edge 或 Safari。");
+        }
+      }
+
+      function bytesToHex(bytes) {
+        return [...bytes].map(value => value.toString(16).padStart(2, "0")).join("");
+      }
+
+      function bytesToBinaryString(bytes) {
+        let binary = "";
+        const chunkSize = 0x8000;
+        for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+          binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+        }
+        return binary;
+      }
+
+      function bytesToBase64Url(bytes) {
+        return btoa(bytesToBinaryString(bytes))
+          .replace(/\+/g, "-")
+          .replace(/\//g, "_")
+          .replace(/=+$/g, "");
+      }
+
+      function base64UrlToBytes(value) {
+        if (!/^[A-Za-z0-9_-]+$/.test(value)) throw new Error("QR Code 加密金鑰格式錯誤。");
+        const base64 = value.replace(/-/g, "+").replace(/_/g, "/");
+        const padded = base64 + "=".repeat((4 - base64.length % 4) % 4);
+        const binary = atob(padded);
+        return Uint8Array.from(binary, character => character.charCodeAt(0));
+      }
+
+      function dataUrlToImageBytes(dataUrl) {
+        const match = String(dataUrl).match(/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/i);
+        if (!match) throw new Error("照片資料格式錯誤。");
+        const binary = atob(match[2]);
+        return {
+          mimeType: match[1].toLowerCase(),
+          bytes: Uint8Array.from(binary, character => character.charCodeAt(0))
+        };
+      }
+
+      function imageBytesToDataUrl(bytes, mimeType) {
+        if (!ALLOWED_IMAGE_TYPES.has(mimeType)) throw new Error("照片格式不受支援。");
+        const dataUrl = `data:${mimeType};base64,${btoa(bytesToBinaryString(bytes))}`;
+        if (dataUrl.length > MAX_STORED_IMAGE_LENGTH) throw new Error("收到的照片超過大小限制。");
+        return dataUrl;
+      }
+
+      async function importQrEncryptionKey(encodedKey, usage) {
+        requireSecureCrypto();
+        const rawKey = base64UrlToBytes(encodedKey);
+        if (rawKey.length !== 32) throw new Error("QR Code 加密金鑰長度錯誤。");
+        return crypto.subtle.importKey("raw", rawKey, { name: "AES-GCM" }, false, [usage]);
+      }
+
+      function createQrAdditionalData(sessionId) {
+        if (!QR_SESSION_ID_PATTERN.test(sessionId)) throw new Error("QR Code 工作階段格式錯誤。");
+        return new TextEncoder().encode(`drug-photo-upload:v1:${sessionId}`);
+      }
+
+      async function encryptQrImage(dataUrl, encodedKey, sessionId) {
+        const { mimeType, bytes } = dataUrlToImageBytes(dataUrl);
+        if (mimeType !== "image/jpeg") throw new Error("QR Code 僅接受壓縮後的 JPEG 照片。");
+        if (!bytes.length || bytes.length > MAX_QR_CIPHERTEXT_BYTES - 16) {
+          throw new Error("照片超過 QR Code 傳送大小限制。");
+        }
+        const key = await importQrEncryptionKey(encodedKey, "encrypt");
+        const iv = crypto.getRandomValues(new Uint8Array(12));
+        const encrypted = new Uint8Array(await crypto.subtle.encrypt({
+          name: "AES-GCM",
+          iv,
+          additionalData: createQrAdditionalData(sessionId),
+          tagLength: 128
+        }, key, bytes));
+        return {
+          ciphertext: firebase.firestore.Blob.fromUint8Array(encrypted),
+          iv: firebase.firestore.Blob.fromUint8Array(iv)
+        };
+      }
+
+      async function decryptQrImage(sessionData, encodedKey, sessionId) {
+        if (!sessionData?.ciphertext?.toUint8Array || !sessionData?.iv?.toUint8Array) {
+          throw new Error("收到的加密照片資料不完整。");
+        }
+        const key = await importQrEncryptionKey(encodedKey, "decrypt");
+        const iv = sessionData.iv.toUint8Array();
+        if (iv.length !== 12) throw new Error("收到的加密照片資料格式錯誤。");
+        const ciphertext = sessionData.ciphertext.toUint8Array();
+        if (!ciphertext.length || ciphertext.length > MAX_QR_CIPHERTEXT_BYTES) {
+          throw new Error("收到的加密照片超過大小限制。");
+        }
+        const decrypted = new Uint8Array(await crypto.subtle.decrypt(
+          {
+            name: "AES-GCM",
+            iv,
+            additionalData: createQrAdditionalData(sessionId),
+            tagLength: 128
+          },
+          key,
+          ciphertext
+        ));
+        return imageBytesToDataUrl(decrypted, "image/jpeg");
       }
 
       function loadImageFile(file) {
@@ -300,8 +512,10 @@
 
       function updateAddButton() {
         const button = document.getElementById("addDrugButton");
+        const qrButton = document.getElementById("qrAddPhotoButton");
         button.disabled = isImageProcessing || isAddingDrug;
         button.textContent = isImageProcessing ? "處理照片中…" : isAddingDrug ? "新增中…" : "新增藥物";
+        qrButton.disabled = isImageProcessing || isAddingDrug;
       }
 
       function updateAddImagePreview(dataUrl) {
@@ -358,6 +572,377 @@
             isImageProcessing = false;
             updateAddButton();
           }
+        }
+      }
+
+      function createQrTransferCredentials() {
+        requireSecureCrypto();
+        return {
+          sessionId: bytesToHex(crypto.getRandomValues(new Uint8Array(16))),
+          encodedKey: bytesToBase64Url(crypto.getRandomValues(new Uint8Array(32)))
+        };
+      }
+
+      function buildQrUploadUrl(sessionId, encodedKey) {
+        const url = new URL(window.location.href);
+        url.search = "";
+        const hash = new URLSearchParams();
+        hash.set("qrUpload", sessionId);
+        hash.set("key", encodedKey);
+        url.hash = hash.toString();
+        return url.toString();
+      }
+
+      function createQrDialogContent(uploadUrl, targetLabel) {
+        const wrapper = document.createElement("div");
+
+        const instructions = document.createElement("p");
+        instructions.className = "mb-2";
+        instructions.textContent = `請用手機掃描下方 QR Code，為「${targetLabel}」拍照或選擇照片。`;
+
+        const securityNote = document.createElement("p");
+        securityNote.className = "small text-secondary mb-3";
+        securityNote.textContent = "照片會在手機端壓縮並加密，請保持此視窗開啟。";
+
+        const qrBox = document.createElement("div");
+        qrBox.className = "qr-code-box mb-3";
+        qrBox.setAttribute("aria-label", "手機上傳 QR Code");
+
+        const status = document.createElement("div");
+        status.className = "alert alert-info py-2 mb-2";
+        status.setAttribute("role", "status");
+        status.setAttribute("aria-live", "polite");
+        status.textContent = "等待手機上傳照片…";
+
+        const countdown = document.createElement("div");
+        countdown.className = "small text-secondary mb-2";
+
+        const fallback = document.createElement("a");
+        fallback.href = uploadUrl;
+        fallback.target = "_blank";
+        fallback.rel = "noopener noreferrer";
+        fallback.className = "small";
+        fallback.textContent = "無法掃描？開啟手機上傳連結";
+
+        wrapper.append(instructions, securityNote, qrBox, status, countdown, fallback);
+        return { wrapper, qrBox, status, countdown };
+      }
+
+      async function startQrPhotoTransfer({ targetLabel, onImageReceived, successMessage }) {
+        try {
+          requireSecureCrypto();
+
+          if (activeQrTransferCleanup) await activeQrTransferCleanup();
+
+          const { sessionId, encodedKey } = createQrTransferCredentials();
+          const uploadUrl = buildQrUploadUrl(sessionId, encodedKey);
+          const sessionRef = photoUploadSessionsRef.doc(sessionId);
+          const expiresAt = Date.now() + QR_SESSION_DURATION_MS;
+
+          await sessionRef.set({
+            schemaVersion: 1,
+            status: "pending",
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            expiresAt: firebase.firestore.Timestamp.fromMillis(expiresAt)
+          });
+
+          const view = createQrDialogContent(uploadUrl, targetLabel);
+          let active = true;
+          let applyingImage = false;
+          let disposed = false;
+          let unsubscribe = () => { };
+          let countdownTimer = null;
+          const ownsQrModal = () => Boolean(Swal.getHtmlContainer()?.contains(view.wrapper));
+
+          const dispose = async (deleteSession = true) => {
+            if (disposed) return;
+            disposed = true;
+            active = false;
+            unsubscribe();
+            if (countdownTimer) clearInterval(countdownTimer);
+            if (activeQrTransferCleanup === dispose) activeQrTransferCleanup = null;
+            if (deleteSession) {
+              sessionRef.delete().catch(error => {
+                console.warn("清除 QR 上傳工作階段失敗", error);
+              });
+            }
+          };
+          activeQrTransferCleanup = dispose;
+
+          const updateCountdown = () => {
+            if (!active) return;
+            const remainingSeconds = Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000));
+            const minutes = String(Math.floor(remainingSeconds / 60)).padStart(2, "0");
+            const seconds = String(remainingSeconds % 60).padStart(2, "0");
+            view.countdown.textContent = `QR Code 剩餘有效時間：${minutes}:${seconds}`;
+            if (remainingSeconds === 0) {
+              dispose(true).then(() => {
+                if (ownsQrModal()) Swal.fire("QR Code 已過期", "請重新產生新的 QR Code。", "warning");
+              });
+            }
+          };
+          updateCountdown();
+          countdownTimer = setInterval(updateCountdown, 1000);
+
+          unsubscribe = sessionRef.onSnapshot(async snapshot => {
+            if (!active || applyingImage || !snapshot.exists) return;
+            const sessionData = snapshot.data() || {};
+            if (sessionData.status !== "uploaded") return;
+            const uploadedExpiresAt = sessionData.expiresAt?.toMillis?.() || 0;
+            if (sessionData.schemaVersion !== 1 || !uploadedExpiresAt || Date.now() >= uploadedExpiresAt) {
+              await dispose(true);
+              if (ownsQrModal()) Swal.fire("QR Code 已失效", "請重新產生新的 QR Code。", "warning");
+              return;
+            }
+            applyingImage = true;
+            view.status.className = "alert alert-info py-2 mb-2";
+            view.status.textContent = "照片已收到，正在解密並套用…";
+
+            let imageData;
+            try {
+              imageData = await decryptQrImage(sessionData, encodedKey, sessionId);
+            } catch (error) {
+              console.warn("拒絕無效的 QR 照片資料", error);
+              await dispose(true);
+              if (ownsQrModal()) {
+                Swal.fire("照片驗證失敗", "傳送內容無法驗證，請重新產生 QR Code。", "error");
+              }
+              return;
+            }
+
+            if (!active) return;
+            try {
+              await onImageReceived(imageData);
+              if (!active) return;
+              await dispose(true);
+              if (ownsQrModal()) Swal.fire("手機上傳成功", successMessage, "success");
+            } catch (error) {
+              console.error("套用手機上傳照片失敗", error);
+              if (!active) return;
+              await dispose(true);
+              if (ownsQrModal()) Swal.fire("照片套用失敗", friendlyError(error), "error");
+            }
+          }, async error => {
+            console.error("監聽 QR 上傳工作階段失敗", error);
+            if (!active) return;
+            await dispose(true);
+            if (ownsQrModal()) Swal.fire("QR 上傳失敗", friendlyError(error), "error");
+          });
+
+          Swal.fire({
+            title: "手機掃碼上傳照片",
+            html: view.wrapper,
+            width: 560,
+            showConfirmButton: false,
+            showCancelButton: true,
+            cancelButtonText: "取消",
+            allowOutsideClick: false,
+            allowEscapeKey: true,
+            didOpen: () => {
+              try {
+                new QRCode(view.qrBox, {
+                  text: uploadUrl,
+                  width: 220,
+                  height: 220,
+                  colorDark: "#000000",
+                  colorLight: "#ffffff",
+                  correctLevel: QRCode.CorrectLevel.M
+                });
+                const qrImage = view.qrBox.querySelector("img");
+                if (qrImage) qrImage.alt = "手機上傳 QR Code";
+              } catch (error) {
+                console.error("產生 QR Code 失敗", error);
+                view.status.className = "alert alert-danger py-2 mb-2";
+                view.status.textContent = "QR Code 產生失敗，請使用下方連結。";
+              }
+            },
+            didDestroy: () => {
+              if (active) void dispose(true);
+            }
+          }).then(() => {
+            if (active) dispose(true);
+          });
+        } catch (error) {
+          console.error("建立 QR 上傳工作階段失敗", error);
+          if (activeQrTransferCleanup) await activeQrTransferCleanup();
+          activeQrTransferCleanup = null;
+          await Swal.fire("無法建立 QR Code", friendlyError(error), "error");
+        }
+      }
+
+      async function startQrUploadForAddForm() {
+        await startQrPhotoTransfer({
+          targetLabel: "新增藥物表單",
+          successMessage: "照片已放入新增表單，填完資料後即可新增藥物。",
+          onImageReceived: async imageData => {
+            imageProcessingToken += 1;
+            selectedImageData = imageData;
+            document.getElementById("imageFile").value = "";
+            updateAddImagePreview(selectedImageData);
+            document.getElementById("imageStatus").textContent =
+              `已透過手機安全上傳（約 ${formatBytes(estimateDataUrlBytes(imageData))}）`;
+            updateAddButton();
+          }
+        });
+      }
+
+      async function startQrUploadForDrug(id, name) {
+        const drug = drugCache.find(item => item.id === id);
+        if (!drug) return Swal.fire("找不到藥物", "請重新整理頁面後再試。", "warning");
+        await startQrPhotoTransfer({
+          targetLabel: name || "這筆藥物",
+          successMessage: `「${name || "藥物"}」的照片已更新。`,
+          onImageReceived: imageData => drugsRef.doc(id).update({ image: imageData })
+        });
+      }
+
+      function setMobileSessionMessage(message, type = "info") {
+        const element = document.getElementById("mobileSessionMessage");
+        element.className = `alert alert-${type}`;
+        element.textContent = message;
+      }
+
+      function updateMobilePhotoPreview(dataUrl) {
+        const preview = document.getElementById("mobilePhotoPreview");
+        if (dataUrl) preview.src = dataUrl;
+        else preview.removeAttribute("src");
+        preview.hidden = !dataUrl;
+      }
+
+      function updateMobileUploadButton() {
+        const button = document.getElementById("mobileUploadButton");
+        button.disabled = !mobileImageData || isMobileImageProcessing || isMobileUploading;
+        button.textContent = isMobileImageProcessing
+          ? "處理照片中…"
+          : isMobileUploading
+            ? "加密上傳中…"
+            : "上傳到電腦";
+      }
+
+      async function initializeMobileQrUpload(sessionId, encodedKey) {
+        document.getElementById("mainApp").hidden = true;
+        document.getElementById("qrUploadPage").hidden = false;
+        document.title = "手機上傳藥物照片";
+
+        try {
+          requireSecureCrypto();
+          if (!QR_SESSION_ID_PATTERN.test(sessionId)) throw new Error("QR Code 工作階段格式錯誤。");
+          const keyBytes = base64UrlToBytes(encodedKey);
+          if (keyBytes.length !== 32) throw new Error("QR Code 加密金鑰格式錯誤。");
+
+          const sessionRef = photoUploadSessionsRef.doc(sessionId);
+          const snapshot = await sessionRef.get();
+          if (!snapshot.exists) throw new Error("這個 QR Code 已失效或已被取消。");
+
+          const data = snapshot.data() || {};
+          const expiresAt = data.expiresAt?.toMillis?.() || 0;
+          if (data.schemaVersion !== 1) throw new Error("QR Code 版本不受支援，請在電腦上重新產生。");
+          if (data.status !== "pending") throw new Error("這個 QR Code 已經使用過，請在電腦上重新產生。");
+          if (!expiresAt || Date.now() >= expiresAt) throw new Error("這個 QR Code 已過期，請在電腦上重新產生。");
+
+          mobileQrSessionRef = sessionRef;
+          mobileQrSessionId = sessionId;
+          mobileQrKey = encodedKey;
+          mobileQrExpiresAt = expiresAt;
+          document.getElementById("mobileUploadControls").hidden = false;
+          setMobileSessionMessage("QR Code 驗證成功，請拍照或從相簿選擇照片。", "success");
+          updateMobileUploadButton();
+        } catch (error) {
+          console.error("初始化手機 QR 上傳頁失敗", error);
+          document.getElementById("mobileUploadControls").hidden = true;
+          setMobileSessionMessage(friendlyError(error), "danger");
+        }
+      }
+
+      async function previewMobileQrImage(event) {
+        const file = event.target.files?.[0];
+        if (!file) {
+          mobileImageData = "";
+          updateMobilePhotoPreview("");
+          document.getElementById("mobileImageStatus").textContent = "";
+          updateMobileUploadButton();
+          return;
+        }
+
+        const token = ++mobileImageProcessingToken;
+        mobileImageData = "";
+        isMobileImageProcessing = true;
+        updateMobilePhotoPreview("");
+        document.getElementById("mobileImageStatus").className = "small text-secondary mb-3";
+        document.getElementById("mobileImageStatus").textContent = "正在縮小並壓縮照片…";
+        updateMobileUploadButton();
+
+        try {
+          const result = await compressImage(file);
+          if (token !== mobileImageProcessingToken) return;
+          mobileImageData = result.dataUrl;
+          updateMobilePhotoPreview(mobileImageData);
+          document.getElementById("mobileImageStatus").textContent =
+            `已準備 ${result.width} × ${result.height}（約 ${formatBytes(result.bytes)}）`;
+        } catch (error) {
+          if (token !== mobileImageProcessingToken) return;
+          event.target.value = "";
+          mobileImageData = "";
+          updateMobilePhotoPreview("");
+          document.getElementById("mobileImageStatus").className = "small text-danger mb-3";
+          document.getElementById("mobileImageStatus").textContent = friendlyError(error);
+        } finally {
+          if (token === mobileImageProcessingToken) {
+            isMobileImageProcessing = false;
+            updateMobileUploadButton();
+          }
+        }
+      }
+
+      async function submitMobileQrImage() {
+        if (!mobileQrSessionRef || !mobileQrSessionId || !mobileQrKey) {
+          return setMobileSessionMessage("QR Code 工作階段不存在，請重新掃描。", "danger");
+        }
+        if (!mobileImageData || isMobileImageProcessing || isMobileUploading) return;
+        if (Date.now() >= mobileQrExpiresAt) {
+          document.getElementById("mobileUploadControls").hidden = true;
+          return setMobileSessionMessage("QR Code 已過期，請在電腦上重新產生。", "warning");
+        }
+
+        isMobileUploading = true;
+        updateMobileUploadButton();
+        document.getElementById("mobileImageStatus").className = "small text-secondary mb-3";
+        document.getElementById("mobileImageStatus").textContent = "正在加密照片並傳送…";
+
+        try {
+          const encrypted = await encryptQrImage(mobileImageData, mobileQrKey, mobileQrSessionId);
+          await db.runTransaction(async transaction => {
+            const snapshot = await transaction.get(mobileQrSessionRef);
+            if (!snapshot.exists) throw new Error("QR Code 已被取消，請在電腦上重新產生。");
+            const data = snapshot.data() || {};
+            const expiresAt = data.expiresAt?.toMillis?.() || 0;
+            if (data.schemaVersion !== 1) throw new Error("QR Code 版本不受支援，請在電腦上重新產生。");
+            if (data.status !== "pending") throw new Error("已有其他手機完成上傳，這個 QR Code 無法再次使用。");
+            if (!expiresAt || Date.now() >= expiresAt) throw new Error("QR Code 已過期，請在電腦上重新產生。");
+
+            transaction.update(mobileQrSessionRef, {
+              status: "uploaded",
+              ciphertext: encrypted.ciphertext,
+              iv: encrypted.iv,
+              uploadedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+          });
+
+          document.getElementById("mobileUploadButton").disabled = true;
+          document.getElementById("mobileUploadButton").textContent = "上傳完成";
+          document.getElementById("mobileImageFile").disabled = true;
+          document.getElementById("mobileImageStatus").className = "small text-success mb-3";
+          document.getElementById("mobileImageStatus").textContent = "照片已安全傳送，請查看電腦畫面。";
+          setMobileSessionMessage("上傳成功！現在可以關閉這個頁面。", "success");
+          mobileQrSessionRef = null;
+          mobileQrKey = "";
+        } catch (error) {
+          console.error("手機 QR 照片上傳失敗", error);
+          document.getElementById("mobileImageStatus").className = "small text-danger mb-3";
+          document.getElementById("mobileImageStatus").textContent = friendlyError(error);
+        } finally {
+          isMobileUploading = false;
+          if (mobileQrSessionRef) updateMobileUploadButton();
         }
       }
 
@@ -526,7 +1111,13 @@
           deleteButton.textContent = "刪除";
           deleteButton.addEventListener("click", () => deleteDrug(doc.id));
 
-          actions.append(editButton, deleteButton);
+          const qrButton = document.createElement("button");
+          qrButton.type = "button";
+          qrButton.className = "btn btn-sm btn-outline-success";
+          qrButton.textContent = "手機上傳";
+          qrButton.addEventListener("click", () => startQrUploadForDrug(doc.id, data.name));
+
+          actions.append(qrButton, editButton, deleteButton);
           actionsCell.appendChild(actions);
           row.appendChild(actionsCell);
           list.appendChild(row);
@@ -732,16 +1323,30 @@
         }
       }
 
-      drugsRef.orderBy("name").onSnapshot(snapshot => {
-        drugCache = [];
-        snapshot.forEach(doc => drugCache.push({ id: doc.id, data: doc.data() }));
-        const currentIds = new Set(drugCache.map(doc => doc.id));
-        selectedIds = new Set([...selectedIds].filter(id => currentIds.has(id)));
-        renderDrugs();
-      }, error => {
-        console.error("讀取藥物清單失敗", error);
-        Swal.fire("讀取失敗", friendlyError(error), "error");
-      });
+      function subscribeToDrugs() {
+        return drugsRef.orderBy("name").onSnapshot(snapshot => {
+          drugCache = [];
+          snapshot.forEach(doc => drugCache.push({ id: doc.id, data: doc.data() }));
+          const currentIds = new Set(drugCache.map(doc => doc.id));
+          selectedIds = new Set([...selectedIds].filter(id => currentIds.has(id)));
+          renderDrugs();
+        }, error => {
+          console.error("讀取藥物清單失敗", error);
+          Swal.fire("讀取失敗", friendlyError(error), "error");
+        });
+      }
+
+      async function initializeApplication() {
+        const bootstrap = window.__qrUploadBootstrap || null;
+        delete window.__qrUploadBootstrap;
+        if (bootstrap?.sessionId) {
+          await initializeMobileQrUpload(bootstrap.sessionId, bootstrap.encodedKey);
+          return;
+        }
+        subscribeToDrugs();
+      }
+
+      initializeApplication();
 
       function appendPdfCell(row, value) {
         const cell = document.createElement("td");
